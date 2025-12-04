@@ -136,8 +136,8 @@
         <label for="resolution">Resolusi canvas:</label>
         <select id="resolution">
           <option value="320x240">320×240</option>
-          <option value="480x360" selected>480×360</option>
-          <option value="640x480">640×480</option>
+          <option value="480x360">480×360</option>
+          <option value="640x480" selected>640×480</option>
           <option value="960x720">960×720</option>
         </select>
       </div>
@@ -224,7 +224,7 @@
     let running = false;
     let frameCount = 0;
 
-    let W = 480, H = 360;
+    let W = 640, H = 480;
 
     function parseWH(val) {
       const [w, h] = val.split('x').map(Number);
@@ -232,13 +232,14 @@
     }
 
     function resizeCanvas() {
-      const { w, h } = parseWH(resolutionSel.value);
+      const [w, h] = resolutionSel.value.split('x').map(Number);
       W = w; H = h;
       video.width = W;
       video.height = H;
       canvas.width = W;
       canvas.height = H;
     }
+
 
     async function setupCamera() {
       const constraints = {
