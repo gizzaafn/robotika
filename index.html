@@ -1,230 +1,176 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-    <meta charset="utf-8">
-    <title>OpenCV.js Face & Eye Detection</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deteksi Objek Real-Time dengan TensorFlow.js</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
     <style>
+        /* CSS untuk styling sederhana */
         body {
             font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
             background-color: #f4f4f9;
         }
         h1 {
             color: #333;
         }
-        #video, #canvasOutput {
-            border: 2px solid #3498db;
-            margin: 10px auto;
+        #container {
+            position: relative;
+            margin-top: 10px;
+        }
+        video {
             display: block;
-            background-color: #eee;
+            border: 3px solid #007bff;
+            border-radius: 8px;
+            max-width: 100%;
+            height: auto;
         }
-        .controls {
-            margin: 20px 0;
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
         }
-        .status-message {
-            margin-top: 15px;
+        #status {
+            margin-top: 20px;
+            font-size: 1.1em;
+            color: #555;
             font-weight: bold;
-            color: #e74c3c;
         }
     </style>
 </head>
 <body>
 
-    <h1>Deteksi Wajah & Mata (OpenCV.js)</h1>
-
-    <div class="controls">
-        <label>
-            <input type="checkbox" id="faceDetect" checked> Deteksi Wajah
-        </label>
-        <label>
-            <input type="checkbox" id="eyeDetect" checked> Deteksi Mata
-        </label>
+    <h1>👀 Deteksi Objek Real-Time</h1>
+    <div id="status">Memuat model... Tunggu sebentar.</div>
+    
+    <div id="container">
+        <video id="webcam" autoplay muted playsinline></video>
+        <canvas id="canvas"></canvas>
     </div>
 
-    <canvas id="canvasOutput"></canvas>
-
-    <video id="video" style="display: none;"></video>
-
-    <div id="status" class="status-message">Memuat OpenCV.js...</div>
-
-    <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady();"></script>
-
     <script>
-        let video = document.getElementById('video');
-        let canvasOutput = document.getElementById('canvasOutput');
-        let statusElement = document.getElementById('status');
-        let faceDetectCheckbox = document.getElementById('faceDetect');
-        let eyeDetectCheckbox = document.getElementById('eyeDetect');
+        // Deklarasi variabel
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const statusEl = document.getElementById('status');
+        let model = undefined;
 
-        let streaming = false;
-        let cap = null; // VideoCapture
-        let src = null; // Mat untuk frame input
-        let gray = null; // Mat untuk gambar grayscale
-        let faceCascade = new cv.CascadeClassifier();
-        let eyeCascade = new cv.CascadeClassifier();
-        
-        const FPS = 30;
-        let videoWidth, videoHeight;
-
-        // Fungsi yang dipanggil setelah OpenCV.js dimuat
-        function onOpenCvReady() {
-            statusElement.innerHTML = 'OpenCV.js berhasil dimuat. Mengakses kamera...';
-            startCamera();
+        /**
+         * 1. Fungsi untuk memuat model COCO-SSD.
+         */
+        async function loadModel() {
+            try {
+                // Tulis status
+                statusEl.textContent = 'Memuat model...';
+                
+                // Memuat model COCO-SSD (SSD MobileNet V2)
+                model = await cocoSsd.load();
+                
+                // Model berhasil dimuat
+                statusEl.textContent = 'Model berhasil dimuat. Memulai kamera...';
+                
+                // Pindah ke langkah berikutnya: memulai webcam
+                startWebcam();
+            } catch (error) {
+                console.error('Gagal memuat model:', error);
+                statusEl.textContent = 'ERROR: Gagal memuat model. Lihat konsol.';
+            }
         }
 
-        // Memuat file cascade dari URL
-        function loadCascade(url, cascade) {
-            return new Promise((resolve, reject) => {
-                let request = new XMLHttpRequest();
-                request.open('GET', url, true);
-                request.responseType = 'arraybuffer';
-                request.onload = function (ev) {
-                    if (request.readyState === 4) {
-                        if (request.status === 200) {
-                            let data = new Uint8Array(request.response);
-                            cv.FS_createDataFile('/', url, data, true, false, false);
-                            cascade.load(url);
-                            resolve();
-                        } else {
-                            reject('Gagal memuat ' + url + '. Status: ' + request.status);
-                        }
-                    }
-                };
-                request.send();
+        /**
+         * 2. Fungsi untuk memulai webcam dan mendapatkan aliran video.
+         */
+        function startWebcam() {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices
+                    .getUserMedia({ video: true })
+                    .then((stream) => {
+                        // Aliran video berhasil didapatkan
+                        video.srcObject = stream;
+                        video.addEventListener('loadeddata', () => {
+                            // Video sudah siap, atur ukuran canvas
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                            statusEl.textContent = 'Webcam siap. Memulai deteksi...';
+                            // Mulai loop deteksi
+                            detectFrame();
+                        });
+                    })
+                    .catch((err) => {
+                        console.error('Gagal mengakses kamera:', err);
+                        statusEl.textContent = 'ERROR: Gagal mengakses kamera. Pastikan izin diberikan.';
+                    });
+            } else {
+                statusEl.textContent = 'ERROR: Browser Anda tidak mendukung API MediaDevices.';
+            }
+        }
+
+        /**
+         * 3. Fungsi utama yang melakukan deteksi objek di setiap frame.
+         */
+        function detectFrame() {
+            // Memastikan model dan video sudah siap
+            if (model && video.readyState === 4) {
+                // Mengubah video menjadi tensor
+                tf.tidy(() => {
+                    model.detect(video).then((predictions) => {
+                        // Menghapus canvas sebelum menggambar bounding box baru
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        
+                        // Memanggil fungsi untuk menggambar hasil deteksi
+                        drawPredictions(predictions);
+                    });
+                });
+            }
+            // Melakukan loop deteksi (sekitar 60 kali per detik)
+            requestAnimationFrame(detectFrame);
+        }
+
+        /**
+         * 4. Fungsi untuk menggambar bounding box dan label pada canvas.
+         */
+        function drawPredictions(predictions) {
+            // Mengatur font untuk teks
+            ctx.font = '16px Arial';
+            ctx.textBaseline = 'top';
+
+            // Iterasi melalui setiap hasil deteksi
+            predictions.forEach(prediction => {
+                const [x, y, width, height] = prediction.bbox;
+                
+                // Menentukan warna acak untuk setiap deteksi
+                const color = 'rgb(0, 255, 0)'; // Warna hijau
+
+                // 1. Menggambar Bounding Box
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 4;
+                ctx.strokeRect(x, y, width, height);
+
+                // 2. Menggambar Background untuk Label (untuk keterbacaan)
+                ctx.fillStyle = color;
+                const text = `${prediction.class} (${Math.round(prediction.score * 100)}%)`;
+                const textWidth = ctx.measureText(text).width;
+                const textHeight = parseInt(ctx.font, 10); // Tinggi font
+                
+                // Menggambar kotak latar belakang di atas bounding box
+                ctx.fillRect(x, y, textWidth + 10, textHeight + 4);
+
+                // 3. Menggambar Teks Label di atas background
+                ctx.fillStyle = '#000000'; // Warna teks hitam
+                ctx.fillText(text, x + 5, y + 2);
             });
         }
 
-        // Mulai kamera dan pemrosesan
-        async function startCamera() {
-            if (streaming) return;
+        // --- Mulai Aplikasi ---
+        loadModel();
 
-            // Load Haar Cascade files
-            try {
-                statusElement.innerHTML = 'Memuat model deteksi wajah...';
-                await loadCascade('haarcascade_frontalface_default.xml', faceCascade);
-                statusElement.innerHTML = 'Memuat model deteksi mata...';
-                await loadCascade('haarcascade_eye_tree_eyeglasses.xml', eyeCascade);
-                statusElement.innerHTML = 'Model berhasil dimuat. Memulai streaming...';
-            } catch(e) {
-                statusElement.innerHTML = 'Gagal memuat model: ' + e;
-                console.error(e);
-                return;
-            }
-
-            // Akses kamera
-            navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-                .then(function (stream) {
-                    video.srcObject = stream;
-                    video.play();
-                })
-                .catch(function (err) {
-                    statusElement.innerHTML = "Akses kamera gagal: " + err.name;
-                    console.log("Akses kamera gagal: " + err.name);
-                });
-
-            // Event saat video siap diputar
-            video.addEventListener("canplay", function (ev) {
-                if (!streaming) {
-                    videoWidth = video.videoWidth;
-                    videoHeight = video.videoHeight;
-
-                    // Set ukuran canvas
-                    canvasOutput.width = videoWidth;
-                    canvasOutput.height = videoHeight;
-
-                    // Inisialisasi Mat
-                    src = new cv.Mat(videoHeight, videoWidth, cv.CV_8UC4);
-                    gray = new cv.Mat(videoHeight, videoWidth, cv.CV_8UC1);
-                    
-                    // Inisialisasi VideoCapture dan mulai loop pemrosesan
-                    cap = new cv.VideoCapture(video);
-                    streaming = true;
-                    statusElement.innerHTML = 'Streaming dimulai. Sedang mendeteksi...';
-                    setTimeout(processVideo, 1000 / FPS);
-                }
-            }, false);
-        }
-
-        // Loop utama pemrosesan video
-        function processVideo() {
-            try {
-                if (!streaming) {
-                    // Membersihkan Mat saat tidak streaming
-                    src.delete();
-                    gray.delete();
-                    faceCascade.delete();
-                    eyeCascade.delete();
-                    return;
-                }
-                
-                let begin = Date.now();
-                
-                // Ambil frame dari video
-                cap.read(src);
-
-                // Konversi ke grayscale
-                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
-
-                // Buat Mat untuk menyimpan hasil deteksi (segi empat)
-                let faces = new cv.RectVector();
-                let eyes = new cv.RectVector();
-                
-                // Deteksi Wajah
-                if (faceDetectCheckbox.checked) {
-                    // cv.detectMultiScale(image, objects, scaleFactor, minNeighbors, flags, minSize, maxSize)
-                    faceCascade.detectMultiScale(gray, faces, 1.1, 3, 0, new cv.Size(30, 30), new cv.Size(videoWidth, videoHeight));
-                }
-
-                // Gambar hasil deteksi wajah
-                for (let i = 0; i < faces.size(); ++i) {
-                    let face = faces.get(i);
-                    let point1 = new cv.Point(face.x, face.y);
-                    let point2 = new cv.Point(face.x + face.width, face.y + face.height);
-                    
-                    // Gambar kotak merah untuk wajah
-                    cv.rectangle(src, point1, point2, [255, 0, 0, 255], 2);
-
-                    // Deteksi Mata di dalam area wajah
-                    if (eyeDetectCheckbox.checked) {
-                        // Region of Interest (ROI) untuk wajah
-                        let faceROI = gray.roi(face);
-                        
-                        // Deteksi Mata
-                        // cv.detectMultiScale(image, objects, scaleFactor, minNeighbors, flags, minSize, maxSize)
-                        eyeCascade.detectMultiScale(faceROI, eyes, 1.1, 3, 0, new cv.Size(10, 10), new cv.Size(face.width / 2, face.height / 2));
-                        
-                        // Gambar hasil deteksi mata
-                        for (let j = 0; j < eyes.size(); ++j) {
-                            let eye = eyes.get(j);
-                            let eyePoint1 = new cv.Point(face.x + eye.x, face.y + eye.y);
-                            let eyePoint2 = new cv.Point(face.x + eye.x + eye.width, face.y + eye.y + eye.height);
-                            
-                            // Gambar kotak hijau untuk mata
-                            cv.rectangle(src, eyePoint1, eyePoint2, [0, 255, 0, 255], 1);
-                        }
-                        faceROI.delete(); // Penting: Hapus Mat ROI
-                    }
-                }
-
-                // Tampilkan frame yang sudah diproses di canvas
-                cv.imshow(canvasOutput, src);
-
-                // Hitung waktu pemrosesan
-                let delay = 1000 / FPS - (Date.now() - begin);
-                setTimeout(processVideo, delay);
-
-                // Hapus Mat hasil deteksi
-                faces.delete();
-                eyes.delete();
-
-            } catch (err) {
-                // Tangani error, misal jika cv.js belum siap sepenuhnya
-                console.error("Kesalahan dalam loop pemrosesan video: " + err);
-                statusElement.innerHTML = "Kesalahan: " + err.message;
-            }
-        }
     </script>
+
 </body>
 </html>
