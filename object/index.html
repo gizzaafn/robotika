@@ -1,411 +1,76 @@
 <!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pendeteksi Objek — TensorFlow.js COCO-SSD</title>
-  <meta name="description" content="Deteksi objek real-time di browser menggunakan TensorFlow.js dan COCO-SSD." />
-  <style>
-    :root {
-      color-scheme: light dark;
-    }
-    body {
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
-      margin: 0;
-      padding: 16px;
-      background: #0f1220;
-      color: #e6e9f0;
-    }
-    header {
-      margin-bottom: 12px;
-    }
-    h1 {
-      font-size: 20px;
-      margin: 0 0 8px 0;
-    }
-    .controls {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin: 12px 0;
-    }
-    .panel {
-      background: #1a1f33;
-      border: 1px solid #2a3150;
-      border-radius: 10px;
-      padding: 12px;
-    }
-    .row {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    label {
-      font-size: 13px;
-      opacity: 0.9;
-    }
-    select, input[type="number"], input[type="range"] {
-      background: #0f1528;
-      color: #e6e9f0;
-      border: 1px solid #2a3150;
-      border-radius: 8px;
-      padding: 6px 8px;
-      font-size: 13px;
-    }
-    button {
-      background: #3a57ff;
-      color: white;
-      border: none;
-      border-radius: 10px;
-      padding: 10px 14px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    button.secondary {
-      background: #2a3150;
-    }
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-    .canvas-wrap {
-      position: relative;
-      display: inline-block;
-      line-height: 0;
-    }
-    video, canvas {
-      border-radius: 12px;
-      background: #0b0e1a;
-    }
-    canvas {
-      position: absolute;
-      left: 0;
-      top: 0;
-    }
-    .status {
-      margin-top: 10px;
-      font-size: 13px;
-      opacity: 0.9;
-    }
-    .legend {
-      font-size: 12px;
-      opacity: 0.8;
-    }
-    .footer {
-      margin-top: 16px;
-      font-size: 12px;
-      opacity: 0.7;
-    }
-    .badge {
-      display: inline-block;
-      font-size: 12px;
-      line-height: 18px;
-      background: #0f1528;
-      border: 1px solid #2a3150;
-      border-radius: 8px;
-      padding: 2px 8px;
-      margin-right: 6px;
-    }
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-    .mono {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    }
-    a {
-      color: #8fb1ff;
-      text-decoration: none;
-    }
-    a:hover {
-      text-decoration: underline;
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>Pendeteksi Objek — TensorFlow.js COCO-SSD</h1>
-    <div class="legend">Deteksi objek secara real-time di browser (kamera wajib diizinkan).</div>
-  </header>
-
-  <div class="controls grid-2">
-    <div class="panel">
-      <div class="row">
-        <label for="resolution">Resolusi canvas:</label>
-        <select id="resolution">
-          <option value="320x240">320×240</option>
-          <option value="480x360">480×360</option>
-          <option value="640x480" selected>640×480</option>
-          <option value="960x720">960×720</option>
-        </select>
-      </div>
-      <div class="row" style="margin-top:8px;">
-        <label for="minScore">Minimal score:</label>
-        <input id="minScore" type="range" min="0" max="1" step="0.01" value="0.5" />
-        <input id="minScoreNum" type="number" min="0" max="1" step="0.01" value="0.5" style="width:88px;" />
-      </div>
-      <div class="row" style="margin-top:8px;">
-        <label for="everyN">Proses setiap N frame:</label>
-        <select id="everyN">
-          <option value="1" selected>N=1</option>
-          <option value="2">N=2</option>
-          <option value="3">N=3</option>
-          <option value="4">N=4</option>
-        </select>
-      </div>
-      <div class="row" style="margin-top:12px;">
-        <button id="startBtn">Start</button>
-        <button id="stopBtn" class="secondary" disabled>Stop</button>
-      </div>
-      <div class="status" id="status">Status: menunggu izin kamera…</div>
+<html>
+  <head>
+    <title>COCO SSD Object Detection Demo</title>
+    <meta charset="UTF-8">
+    <style>
+      body {font-family: Arial;}
+      .center {text-align: center;}
+      #canvas {
+        position: absolute;
+        left: 0px;
+        top: 0px;
+        z-index: 1;
+      }
+      #video {
+        position: absolute;
+        left: 0px;
+        top: 0px;
+        z-index: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="center">COCO SSD Object Detection</h1>
+    <div class="center">
+      <video id="video" width="640" height="480" autoplay muted></video>
+      <canvas id="canvas" width="640" height="480"></canvas>
     </div>
-
-    <div class="panel">
-      <div class="row">
-        <span class="badge" id="fps">FPS: —</span>
-        <span class="badge" id="count">Objek: —</span>
-        <span class="badge" id="modelTag">Model: COCO‑SSD</span>
-      </div>
-      <div class="row" style="margin-top:8px;">
-        <label for="showBoxes"><input id="showBoxes" type="checkbox" checked /> Tampilkan bounding box</label>
-      </div>
-      <div class="row" style="margin-top:8px;">
-        <label for="mirror"><input id="mirror" type="checkbox" checked /> Mirror (selfie)</label>
-      </div>
-      <div class="row" style="margin-top:8px;">
-        <label for="lineWidth">Tebal garis:</label>
-        <input id="lineWidth" type="range" min="1" max="6" step="1" value="3" />
-        <span class="badge mono" id="lineWidthValue">3 px</span>
-      </div>
+    <div class="center">
+      <button id="start">Start Camera</button>
+      <p id="status">Click the button to start</p>
     </div>
-  </div>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.16.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <script>
+      const status = document.getElementById('status');
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const startBtn = document.getElementById('start');
+      const ctx = canvas.getContext('2d');
+      let model = null;
+      let streaming = false;
 
-  <div class="panel">
-    <div class="canvas-wrap">
-      <video id="video" playsinline muted></video>
-      <canvas id="canvas"></canvas>
-    </div>
-  </div>
-
-  <div class="footer">
-    Dibangun dengan TensorFlow.js dan model COCO‑SSD di sisi klien. Tidak ada data video yang dikirim ke server.
-  </div>
-
-  <!-- TensorFlow.js & COCO-SSD -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2"></script>
-
-  <script>
-  (() => {
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const statusEl = document.getElementById('status');
-    const fpsEl = document.getElementById('fps');
-    const countEl = document.getElementById('count');
-
-    const resolutionSel = document.getElementById('resolution');
-    const everyNSel = document.getElementById('everyN');
-    const minScoreRange = document.getElementById('minScore');
-    const minScoreNum = document.getElementById('minScoreNum');
-
-    const showBoxesChk = document.getElementById('showBoxes');
-    const mirrorChk = document.getElementById('mirror');
-    const lineWidthRange = document.getElementById('lineWidth');
-    const lineWidthValue = document.getElementById('lineWidthValue');
-
-    let stream = null;
-    let model = null;
-    let running = false;
-    let frameCount = 0;
-
-    let W = 640, H = 480;
-
-    function parseWH(val) {
-      const [w, h] = val.split('x').map(Number);
-      return { w, h };
-    }
-
-    function resizeCanvas() {
-      const [w, h] = resolutionSel.value.split('x').map(Number);
-      W = w; H = h;
-      video.width = W;
-      video.height = H;
-      canvas.width = W;
-      canvas.height = H;
-    }
-
-
-    async function setupCamera() {
-      const constraints = {
-        audio: false,
-        video: {
-          width: { ideal: W },
-          height: { ideal: H },
-          facingMode: 'user'
-        }
-      };
-      stream = await navigator.mediaDevices.getUserMedia(constraints);
-      video.srcObject = stream;
-      await video.play();
-    }
-
-    async function loadModel() {
-      statusEl.textContent = 'Status: memuat model COCO‑SSD…';
-      // Load base lite for speed; you can change to 'mobilenet_v2'
-      model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
-      statusEl.textContent = 'Status: model siap.';
-    }
-
-    function drawDetections(dets, minScore, lw) {
-      if (!showBoxesChk.checked) return;
-      ctx.lineWidth = lw;
-      ctx.font = '12px system-ui';
-      dets.forEach(det => {
-        const score = det.score || 0;
-        if (score < minScore) return;
-        const [x, y, w, h] = det.bbox;
-        ctx.strokeStyle = '#3a57ff';
-        ctx.fillStyle = 'rgba(58,87,255,0.15)';
-        ctx.beginPath();
-        ctx.rect(x, y, w, h);
-        ctx.stroke();
-        ctx.fill();
-
-        const label = `${det.class} ${(score*100).toFixed(0)}%`;
-        const pad = 4;
-        const textW = ctx.measureText(label).width;
-        ctx.fillStyle = '#0f1528';
-        ctx.strokeStyle = '#3a57ff';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.rect(x, y - 16, textW + pad*2, 16);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.fillStyle = '#e6e9f0';
-        ctx.fillText(label, x + pad, y - 4);
-      });
-    }
-
-    // Simple FPS tracker
-    const fpsTracker = (() => {
-      let last = performance.now();
-      let fps = 0;
-      return {
-        tick() {
-          const now = performance.now();
-          const dt = now - last;
-          last = now;
-          fps = 1000 / dt;
-          fpsEl.textContent = 'FPS: ' + Math.max(0, Math.min(120, fps)).toFixed(1);
-        }
-      };
-    })();
-
-    async function loop() {
-      if (!running) return;
-      frameCount++;
-
-      // Mirror draw
-      ctx.save();
-      if (mirrorChk.checked) {
-        ctx.translate(W, 0);
-        ctx.scale(-1, 1);
-      }
-
-      ctx.drawImage(video, 0, 0, W, H);
-      ctx.restore();
-
-      const n = Number(everyNSel.value);
-      let detections = [];
-      if (frameCount % n === 0) {
-        try {
-          detections = await model.detect(video);
-        } catch (err) {
-          console.error(err);
-          statusEl.textContent = 'Status: error deteksi — lihat console.';
-        }
-      }
-
-      countEl.textContent = 'Objek: ' + (detections.length || 0);
-      const minScore = Number(minScoreNum.value);
-      const lw = Number(lineWidthRange.value);
-      lineWidthValue.textContent = lw + ' px';
-
-      drawDetections(detections, minScore, lw);
-      fpsTracker.tick();
-
-      // Clear boxes on frames without detection to avoid ghost boxes
-      if (frameCount % n !== 0 && showBoxesChk.checked) {
-        // Optionally skip clearing to keep last boxes; here we do nothing.
-      }
-
-      requestAnimationFrame(loop);
-    }
-
-    function syncMinScoreInputs(fromRange) {
-      if (fromRange) {
-        minScoreNum.value = minScoreRange.value;
-      } else {
-        minScoreRange.value = minScoreNum.value;
-      }
-    }
-
-    minScoreRange.addEventListener('input', () => syncMinScoreInputs(true));
-    minScoreNum.addEventListener('input', () => syncMinScoreInputs(false));
-    resolutionSel.addEventListener('change', () => {
-      const wasRunning = running;
-      stop();
-      resizeCanvas();
-      if (wasRunning) start();
-    });
-
-    function stop() {
-      running = false;
-      stopBtn.disabled = true;
-      startBtn.disabled = false;
-      statusEl.textContent = 'Status: dihentikan.';
-      if (stream) {
-        stream.getTracks().forEach(t => t.stop());
-        stream = null;
-      }
-    }
-
-    async function start() {
-      try {
-        resizeCanvas();
-        await setupCamera();
-        if (!model) await loadModel();
-        running = true;
-        stopBtn.disabled = false;
+      startBtn.onclick = async () => {
         startBtn.disabled = true;
-        statusEl.textContent = 'Status: berjalan.';
-        frameCount = 0;
-        requestAnimationFrame(loop);
-      } catch (err) {
-        console.error(err);
-        statusEl.textContent = 'Status: gagal memulai — izinkan kamera dan coba lagi.';
-      }
-    }
+        status.innerText = 'Starting camera...';
+        const stream = await navigator.mediaDevices.getUserMedia({video: true});
+        video.srcObject = stream;
+        streaming = true;
+        status.innerText = 'Loading model...';
+        model = await cocoSsd.load();
+        status.innerText = 'Model loaded! Starting detection...';
+        detectFrame();
+      };
 
-    startBtn.addEventListener('click', start);
-    stopBtn.addEventListener('click', stop);
-
-    // Preload model in background for faster first start
-    (async () => {
-      try {
-        await loadModel();
-      } catch (e) {
-        // Model load will retry on start
+      async function detectFrame(){
+        if(!streaming) return;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const predictions = await model.detect(video);
+        ctx.font = '16px Arial';
+        ctx.strokeStyle = "#00FFFF";
+        ctx.lineWidth = 2;
+        ctx.textBaseline = "top";
+        predictions.forEach(p => {
+          ctx.strokeRect(...p.bbox);
+          ctx.fillStyle = "#00FFFF";
+          ctx.fillText(
+            `${p.class} ${(p.score*100).toFixed(1)}%`,
+            p.bbox[0], p.bbox[1]
+          );
+        });
+        requestAnimationFrame(detectFrame);
       }
-    })();
-  })();
-  </script>
-</body>
+    </script>
+  </body>
 </html>
