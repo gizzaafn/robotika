@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Deteksi Objek & Warna dengan TensorFlow.js</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #fafafa; margin: 0; text-align: center; }
+    #video, #canvas { max-width: 100%; border-radius: 10px; }
+    #canvas { position: absolute; left: 0; top: 0; }
+    .container { position: relative; display: inline-block; }
+    #status { margin: 10px; color: #0275d8; }
+    #startBtn { margin: 10px; padding: 10px 24px; font-size: 16px; border-radius:8px; border:none; background:#0275d8; color:#fff; cursor:pointer;}
+    #startBtn:disabled {background:#ccc;cursor:not-allowed;}
+  </style>
+</head>
+<body>
+  <h2>Deteksi Objek dan Warna Dominan (TensorFlow.js)</h2>
+  <div class="container">
+    <video id="video" width="480" height="360" autoplay muted playsinline></video>
+    <canvas id="canvas" width="480" height="360"></canvas>
+  </div>
+  <div>
+    <button id="startBtn">Mulai Kamera & Deteksi</button>
+    <div id="status">Status: Menunggu model dimuat...</div>
+  </div>
+
+  <!-- TensorFlow.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.16.0/dist/tf.min.js"></script>
+  <!-- COCO SSD model -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const statusDiv = document.getElementById('status');
+    const startBtn = document.getElementById('startBtn');
+
+    let model = null;
+    let streamActive = false;
+
+    // Start Camera
+    startBtn.onclick = async () => {
+      startBtn.disabled = true;
+      statusDiv.innerText = 'Mengaktifkan kamera...';
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        video.srcObject = stream;
+        streamActive = true;
+        statusDiv.innerText = 'Memuat model deteksi objek...';
+        await loadModelAndDetect();
+      } catch (err) {
+        statusDiv.innerText = 'Gagal mengakses kamera: ' + err.message;
+      }
+    };
+
+    // Load TensorFlow COCO SSD model & Run detection loop
+    async function loadModelAndDetect() {
+      if (!model) {
+        model = await cocoSsd.load();
+      }
+      statusDiv.innerText = 'Model siap! Mulai deteksi...';
+      detectFrame();
+    }
+
+    // Warna Dominan
+    function getDominantColor(imageData) {
+      // Ambil data RGB
+      const data = imageData.data;
+      const rgbCount = {};
+      // Sampling pixel: untuk efisiensi, hanya ambil setiap 4 pixel
+      for (let i = 0; i < data.length; i += 16) {
+        const r = data[i], g = data[i+1], b = data[i+2];
+        const key = `${r},${g},${b}`;
+        rgbCount[key] = (rgbCount[key] || 0) + 1;
+      }
+      // Cari warna dengan count terbanyak
+      let dominant = '';
+      let max = 0;
+      for (const key in rgbCount) {
+        if (rgbCount[key] > max) {
+          max = rgbCount[key];
+          dominant = key;
+        }
+      }
+      const [r, g, b] = dominant.split(',').map(Number);
+      return {r, g, b};
+    }
+
+    function rgbToColorName(r, g, b) {
+      // Sederhana: hitung nilai terbesar
+      const max = Math.max(r,g,b);
+      if (max < 80) return 'gelap/hitam';
+      if (r === max && r - Math.max(g,b) > 40) return 'merah';
+      if (g === max && g - Math.max(r,b) > 40) return 'hijau';
+      if (b === max && b - Math.max(r,g) > 40) return 'biru';
+      if (r > 200 && g > 200 && b < 100) return 'kuning';
+      if (r > 200 && g > 180 && b > 180) return 'putih';
+      if (r > 120 && g > 60 && b < 70) return 'coklat/oranye';
+      return 'warna campuran';
+    }
+
+    async function detectFrame() {
+      if (!streamActive) return;
+      // Render video frame to canvas for detection
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // Model: inference
+      const predictions = await model.detect(canvas);
+      // Clean
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      predictions.forEach(pred => {
+        // Draw bounding box
+        ctx.strokeStyle = "#00FFFF";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(...pred.bbox);
+
+        // Crop object for color detection
+        const [x, y, w, h] = pred.bbox.map(Math.round);
+        const imageData = ctx.getImageData(x, y, w, h);
+        const dominantColor = getDominantColor(imageData);
+        const colorName = rgbToColorName(dominantColor.r, dominantColor.g, dominantColor.b);
+
+        // Text label
+        ctx.fillStyle = "#00FFFF";
+        ctx.font = "16px Verdana";
+        const label = `${pred.class} (${(pred.score*100).toFixed(1)}%)`;
+        ctx.fillText(label, x + 4, y + 18);
+        // Warna
+        ctx.fillStyle = `rgb(${dominantColor.r},${dominantColor.g},${dominantColor.b})`;
+        ctx.fillRect(x, y + 24, 20, 20);
+        ctx.fillStyle = "#222";
+        ctx.font = "12px Verdana";
+        ctx.fillText(colorName, x + 24, y + 39);
+      });
+      // Next frame
+      requestAnimationFrame(detectFrame);
+    }
+  </script>
+</body>
+</html>
