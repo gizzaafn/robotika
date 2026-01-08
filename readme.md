@@ -80,4 +80,5 @@ Jika membutuhkan versi dengan fitur tambahan, berikut varian yang dapat disiapka
 Hubungi developer untuk mendapatkan varian dengan fitur-fitur tersebut.
 
 ---
+<img width="1536" height="1024" alt="ChatGPT Image 18 Des 2025, 17 53 17" src="https://github.com/user-attachments/assets/d3646e07-379b-4619-8eb1-edee6edc5145" />
 
