@@ -1,4 +1,7 @@
 # ESP32 Car Controller
+© 2023 ESP32 Car Controller Project |
+https://youtube.com/shorts/wagcg0qzIeI?si=E1_3-9Hv8gf3yGpl
+
 
 Panduan penggunaan dan instalasi untuk mobil kontrol Wi-Fi berbasis ESP32.
 
@@ -78,5 +81,3 @@ Hubungi developer untuk mendapatkan varian dengan fitur-fitur tersebut.
 
 ---
 
-© 2023 ESP32 Car Controller Project | Dokumentasi ini diperbarui terakhir pada 15 September 2023
-https://youtube.com/shorts/wagcg0qzIeI?si=E1_3-9Hv8gf3yGpl
